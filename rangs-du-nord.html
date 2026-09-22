@@ -55,8 +55,9 @@
   function cell(im,col,row){
     const key=im.src+':'+col+':'+row;if(crops.has(key))return crops.get(key);
     if(!im.naturalWidth)return null;
-    const cw=im.width/4,ch=im.height/3,c=document.createElement('canvas');c.width=Math.floor(cw);c.height=Math.floor(ch);
-    const g=c.getContext('2d');g.drawImage(im,col*cw,row*ch,cw,ch,0,0,c.width,c.height);
+    const bounds=im===decor?[0,.445,.715,1]:[0,1/3,2/3,1];
+    const cw=im.width/4,sy=bounds[row]*im.height,ch=(bounds[row+1]-bounds[row])*im.height,c=document.createElement('canvas');c.width=Math.floor(cw);c.height=Math.floor(ch);
+    const g=c.getContext('2d');g.drawImage(im,col*cw,sy,cw,ch,0,0,c.width,c.height);
     const p=g.getImageData(0,0,c.width,c.height).data;let x0=c.width,y0=c.height,x1=0,y1=0;
     for(let y=0;y<c.height;y++)for(let x=0;x<c.width;x++)if(p[(y*c.width+x)*4+3]>40){x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y);}
     const result={im:c,x:x0,y:y0,w:x1-x0+1,h:y1-y0+1};crops.set(key,result);return result;
