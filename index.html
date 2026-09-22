@@ -1,245 +1,85 @@
-<!DOCTYPE html>
-<html lang="en">
-	<head>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
-		<title>Frontières du Royaume</title>
-		<style>
-html, body, #canvas {
-	margin: 0;
-	padding: 0;
-	border: 0;
-}
-
-body {
-	color: white;
-	background-color: black;
-	overflow: hidden;
-	touch-action: none;
-}
-
-#canvas {
-	display: block;
-}
-
-#canvas:focus {
-	outline: none;
-}
-
-#status, #status-splash, #status-progress {
-	position: absolute;
-	left: 0;
-	right: 0;
-}
-
-#status, #status-splash {
-	top: 0;
-	bottom: 0;
-}
-
-#status {
-	background-color: #242424;
-	display: flex;
-	flex-direction: column;
-	justify-content: center;
-	align-items: center;
-	visibility: hidden;
-}
-
-#status-splash {
-	max-height: 100%;
-	max-width: 100%;
-	margin: auto;
-}
-
-#status-splash.show-image--false {
-	display: none;
-}
-
-#status-splash.fullsize--true {
-	height: 100%;
-	width: 100%;
-	object-fit: contain;
-}
-
-#status-splash.use-filter--false {
-	image-rendering: pixelated;
-}
-
-#status-progress, #status-notice {
-	display: none;
-}
-
-#status-progress {
-	bottom: 10%;
-	width: 50%;
-	margin: 0 auto;
-}
-
-#status-notice {
-	background-color: #5b3943;
-	border-radius: 0.5rem;
-	border: 1px solid #9b3943;
-	color: #e0e0e0;
-	font-family: 'Noto Sans', 'Droid Sans', Arial, sans-serif;
-	line-height: 1.3;
-	margin: 0 2rem;
-	overflow: hidden;
-	padding: 1rem;
-	text-align: center;
-	z-index: 1;
-}
-		</style>
-		<link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
-<link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
-
-	</head>
-	<body>
-		<canvas id="canvas">
-			Your browser does not support the canvas tag.
-		</canvas>
-
-		<noscript>
-			Your browser does not support JavaScript.
-		</noscript>
-
-		<div id="status">
-			<img id="status-splash" class="show-image--true fullsize--true use-filter--true" src="index.png" alt="">
-			<progress id="status-progress"></progress>
-			<div id="status-notice"></div>
-		</div>
-
-		<script>
-// Le moteur Godot est conservé compressé pour l'hébergement privé.
-// Safari récent décompresse le flux avant que Godot ne l'instancie.
-const nativeFetch = window.fetch.bind(window);
-window.fetch = async (resource, options) => {
-	const url = typeof resource === 'string' ? resource : resource.url;
-	if (url.endsWith('index.wasm')) {
-		const parts = await Promise.all([
-			nativeFetch(`${url}.part0`, options),
-			nativeFetch(`${url}.part1`, options)
-		]);
-		if (!parts.every((part) => part.ok)) {
-			throw new Error('Impossible de charger le moteur du jeu.');
-		}
-		const buffers = await Promise.all(parts.map((part) => part.arrayBuffer()));
-		const joined = new Uint8Array(buffers[0].byteLength + buffers[1].byteLength);
-		joined.set(new Uint8Array(buffers[0]), 0);
-		joined.set(new Uint8Array(buffers[1]), buffers[0].byteLength);
-		return new Response(joined, {headers: {
-			'Content-Type': 'application/wasm',
-			'Content-Length': String(joined.byteLength)
-		}});
-	}
-	return nativeFetch(resource, options);
-};
-		</script>
-		<script src="index.js"></script>
-		<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":12840,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
-const GODOT_THREADS_ENABLED = false;
-const engine = new Engine(GODOT_CONFIG);
-
-(function () {
-	const statusOverlay = document.getElementById('status');
-	const statusProgress = document.getElementById('status-progress');
-	const statusNotice = document.getElementById('status-notice');
-
-	let initializing = true;
-	let statusMode = '';
-
-	function setStatusMode(mode) {
-		if (statusMode === mode || !initializing) {
-			return;
-		}
-		if (mode === 'hidden') {
-			statusOverlay.remove();
-			initializing = false;
-			return;
-		}
-		statusOverlay.style.visibility = 'visible';
-		statusProgress.style.display = mode === 'progress' ? 'block' : 'none';
-		statusNotice.style.display = mode === 'notice' ? 'block' : 'none';
-		statusMode = mode;
-	}
-
-	function setStatusNotice(text) {
-		while (statusNotice.lastChild) {
-			statusNotice.removeChild(statusNotice.lastChild);
-		}
-		const lines = text.split('\n');
-		lines.forEach((line) => {
-			statusNotice.appendChild(document.createTextNode(line));
-			statusNotice.appendChild(document.createElement('br'));
-		});
-	}
-
-	function displayFailureNotice(err) {
-		console.error(err);
-		if (err instanceof Error) {
-			setStatusNotice(err.message);
-		} else if (typeof err === 'string') {
-			setStatusNotice(err);
-		} else {
-			setStatusNotice('An unknown error occurred.');
-		}
-		setStatusMode('notice');
-		initializing = false;
-	}
-
-	const missing = Engine.getMissingFeatures({
-		threads: GODOT_THREADS_ENABLED,
-	});
-
-	if (missing.length !== 0) {
-		if (GODOT_CONFIG['serviceWorker'] && GODOT_CONFIG['ensureCrossOriginIsolationHeaders'] && 'serviceWorker' in navigator) {
-			let serviceWorkerRegistrationPromise;
-			try {
-				serviceWorkerRegistrationPromise = navigator.serviceWorker.getRegistration();
-			} catch (err) {
-				serviceWorkerRegistrationPromise = Promise.reject(new Error('Service worker registration failed.'));
-			}
-			// There's a chance that installing the service worker would fix the issue
-			Promise.race([
-				serviceWorkerRegistrationPromise.then((registration) => {
-					if (registration != null) {
-						return Promise.reject(new Error('Service worker already exists.'));
-					}
-					return registration;
-				}).then(() => engine.installServiceWorker()),
-				// For some reason, `getRegistration()` can stall
-				new Promise((resolve) => {
-					setTimeout(() => resolve(), 2000);
-				}),
-			]).then(() => {
-				// Reload if there was no error.
-				window.location.reload();
-			}).catch((err) => {
-				console.error('Error while registering service worker:', err);
-			});
-		} else {
-			// Display the message as usual
-			const missingMsg = 'Error\nThe following features required to run Godot projects on the Web are missing:\n';
-			displayFailureNotice(missingMsg + missing.join('\n'));
-		}
-	} else {
-		setStatusMode('progress');
-		engine.startGame({
-			'onProgress': function (current, total) {
-				if (current > 0 && total > 0) {
-					statusProgress.value = current;
-					statusProgress.max = total;
-				} else {
-					statusProgress.removeAttribute('value');
-					statusProgress.removeAttribute('max');
-				}
-			},
-		}).then(() => {
-			setStatusMode('hidden');
-		}, displayFailureNotice);
-	}
-}());
-		</script>
-	</body>
-</html>
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#101718">
+  <title>Frontières du Royaume</title>
+  <style>
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;touch-action:none}
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#071011;font-family:system-ui,-apple-system,sans-serif;color:#fff}
+    canvas{position:fixed;inset:0;width:100%;height:100%;display:block;background:#17201d}
+    #top{position:fixed;top:max(12px,env(safe-area-inset-top));left:14px;right:14px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;text-shadow:0 2px 5px #000}
+    h1{font:700 17px/1.1 Georgia,serif;letter-spacing:.08em;margin:0;color:#f2ddad}
+    #sub{font-size:11px;opacity:.8;margin-top:4px;letter-spacing:.08em}
+    #count{font:bold 12px/1 system-ui;background:#111b18cc;border:1px solid #d3b77c66;border-radius:20px;padding:8px 11px;color:#efd99f}
+    #hint{position:fixed;left:50%;top:15%;transform:translateX(-50%);width:max-content;max-width:90%;background:#0b1111dc;border:1px solid #d5bd8666;border-radius:20px;padding:9px 14px;font-size:12px;transition:.4s;pointer-events:none;box-shadow:0 5px 20px #0008}
+    #actions{position:fixed;left:8px;right:8px;bottom:max(10px,env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+    button{height:57px;border:1px solid #d1b36d66;border-radius:13px;background:linear-gradient(#26312d,#111817);color:#ead9b4;font:bold 10px/1.15 system-ui;box-shadow:0 5px 13px #0008,inset 0 1px #ffffff18;padding:4px}
+    button span{display:block;font-size:22px;margin-bottom:3px;filter:drop-shadow(0 2px 2px #000)}
+    button.active{background:linear-gradient(#80612b,#3b2b14);border-color:#f2d78d;transform:translateY(1px)}
+    #status{position:fixed;bottom:calc(max(10px,env(safe-area-inset-bottom)) + 66px);left:50%;transform:translateX(-50%);font:bold 11px system-ui;letter-spacing:.12em;color:#f0d99d;text-shadow:0 2px 4px #000;white-space:nowrap}
+  </style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="top"><div><h1>FRONTIÈRES DU ROYAUME</h1><div id="sub">HALTE VIKING • TERRAIN D’ENTRAÎNEMENT</div></div><div id="count">200 GUERRIERS</div></div>
+<div id="hint">Touchez l’étendard puis glissez pour déplacer l’armée</div>
+<div id="status">FORMATION PRÊTE</div>
+<div id="actions">
+  <button data-action="march"><span>ᚱ</span>MARCHE</button>
+  <button data-action="charge"><span>⚔️</span>CHARGE</button>
+  <button data-action="shield"><span>🛡️</span>BOUCLIERS</button>
+  <button data-action="archer"><span>🏹</span>ARCHERS</button>
+</div>
+<script>
+(() => {
+  const cv=document.querySelector('#game'),ctx=cv.getContext('2d',{alpha:false});
+  const DPR=Math.min(devicePixelRatio||1,2), sprites={}, files={
+    bg:'assets/viking_map.png',ready:['ready_00.png','ready_03.png','ready_06.png','ready_09.png'],
+    walk:['walk_00.png','walk_03.png','walk_06.png','walk_09.png'],
+    charge:['attack_00.png','attack_03.png','attack_06.png','attack_09.png'],
+    shield:['shieldfront_00.png','shieldfront_03.png','shieldfront_06.png','shieldfront_09.png'],
+    nock:['archernock_00.png','archernock_03.png','archernock_06.png','archernock_09.png'],
+    draw:['archerdraw_00.png','archerdraw_03.png','archerdraw_06.png','archerdraw_09.png'],
+    release:['archerrelease_00.png','archerrelease_03.png','archerrelease_06.png','archerrelease_09.png']
+  };
+  let loaded=0,total=1+Object.values(files).slice(1).flat().length;
+  function image(src){let im=new Image;im.src=src;im.onload=()=>loaded++;return im}
+  sprites.bg=image(files.bg); for(const [k,v] of Object.entries(files)) if(Array.isArray(v)) sprites[k]=v.map(f=>image('assets/'+f));
+  let W=0,H=0,groundTop=0,groundBottom=0,mode='ready',time=0,last=performance.now(),drag=null,targetX=.37,targetY=.60,formationX=.37,formationY=.60,arrows=[],dust=[];
+  const soldiers=[];
+  for(let i=0;i<200;i++){
+    const row=Math.floor(i/20),col=i%20,archer=row>=8;
+    soldiers.push({i,row,col,archer,phase:Math.random()*6.28,skill:.55+Math.random()*.45,delay:(col*.045+row*.075+Math.random()*.35),x:0,y:0,px:0,py:0});
+  }
+  function resize(){W=innerWidth;H=innerHeight;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);groundTop=H*.15;groundBottom=H*.84}
+  addEventListener('resize',resize);resize();
+  function setMode(m){mode=m;document.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.action===m)); const names={march:'MARCHE LOURDE',charge:'CHARGE EN VAGUE',shield:'LE MUR SE FORME…',archer:'LES ARCHERS ENCOCHENT',ready:'FORMATION PRÊTE'};document.querySelector('#status').textContent=names[m]; if(m==='charge'){targetX=Math.min(.76,formationX+.25);burstDust()} if(m==='march')targetX=Math.min(.72,formationX+.17);}
+  document.querySelectorAll('button').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();setMode(b.dataset.action)}));
+  function pointer(e){const r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height}}
+  cv.addEventListener('pointerdown',e=>{const p=pointer(e);if(Math.abs(p.x-formationX)<.18&&Math.abs(p.y-formationY)<.22){drag=p;cv.setPointerCapture(e.pointerId);document.querySelector('#hint').style.opacity=0}});
+  cv.addEventListener('pointermove',e=>{if(!drag)return;const p=pointer(e);targetX=Math.max(.16,Math.min(.82,p.x));targetY=Math.max(.38,Math.min(.70,p.y));});
+  cv.addEventListener('pointerup',e=>{if(!drag)return;drag=null;setMode('march')});
+  function burstDust(){for(let i=0;i<60;i++)dust.push({x:formationX*W+(Math.random()-.5)*W*.35,y:formationY*H+(Math.random()-.5)*H*.18,a:.35+Math.random()*.4,r:2+Math.random()*7,vx:-8-Math.random()*18,vy:-3-Math.random()*12})}
+  function update(dt){time+=dt;let speed=mode==='charge'?.095:mode==='march'?.038:0;let dx=targetX-formationX,dy=targetY-formationY,d=Math.hypot(dx,dy);if(d>.004&&speed){let s=Math.min(d,speed*dt);formationX+=dx/d*s;formationY+=dy/d*s}else if(d<.008&&mode==='march')setMode('ready');
+    if(mode==='charge'&&Math.random()<dt*16)dust.push({x:(formationX-.10+Math.random()*.22)*W,y:(formationY+.06+Math.random()*.16)*H,a:.45,r:3+Math.random()*8,vx:-14,vy:-10});
+    dust.forEach(p=>{p.x+=p.vx*dt;p.y+=p.vy*dt;p.a-=dt*.28;p.r+=dt*3});dust=dust.filter(p=>p.a>0);
+    if(mode==='archer'){
+      const cycle=time%7.2;if(cycle>4.7&&cycle<4.76&&arrows.length<45){soldiers.filter(s=>s.archer).forEach((s,j)=>{if(j%2===0)arrows.push({x:s.x+10,y:s.y-18,vx:160+s.skill*70,vy:-70-Math.random()*45,t:0})})}
+    }
+    arrows.forEach(a=>{a.t+=dt;a.x+=a.vx*dt;a.y+=a.vy*dt;a.vy+=120*dt});arrows=arrows.filter(a=>a.x<W+20&&a.y<H*.83);
+  }
+  function drawBg(){const im=sprites.bg;if(im.complete&&im.naturalWidth){ctx.drawImage(im,0,0,W,H)}else{ctx.fillStyle='#53634a';ctx.fillRect(0,0,W,H)};let g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#08131888');g.addColorStop(.2,'#0000');g.addColorStop(.75,'#0000');g.addColorStop(1,'#050a09cc');ctx.fillStyle=g;ctx.fillRect(0,0,W,H)}
+  function layout(s){const row=s.row,col=s.col;let spreadX=.46,spreadY=.34;let bx=formationX+(col-9.5)*(spreadX/20)+(row%2)*.004,by=formationY+(row-4.5)*(spreadY/10)+(col-9.5)*.0025;let moving=mode==='march'||mode==='charge';let wave=moving?Math.max(0,Math.min(1,(time*1.7-s.delay)%8)):0;if(mode==='charge'){bx+=(Math.sin(s.phase+time*2.1)*.014+row*.004);by+=(Math.sin(s.phase*2+time*2.7)*.012);}
+    s.px=s.x;s.py=s.y;s.x=bx*W;s.y=by*H+(moving?Math.sin(time*5+s.phase)*2:0);return wave}
+  function animFor(s){if(mode==='shield')return ['shield',Math.max(0,time%6-0.7-s.delay)*3];if(mode==='charge')return ['charge',time*5+s.phase];if(mode==='march')return ['walk',time*3.6+s.phase];if(mode==='archer'&&s.archer){let c=time%7.2;if(c<1.8)return['nock',c*2];if(c<4.7)return['draw',(c-1.8)*1.1];return['release',(c-4.7)*3]}return['ready',time*.9+s.phase]}
+  function drawSoldier(s){const [a,f]=animFor(s),arr=sprites[a],im=arr[Math.floor(f)%arr.length];let depth=(s.y/H-.35)/.5,sz=26+Math.max(0,depth)*18;if(mode==='charge')sz*=1.03;ctx.save();ctx.translate(s.x,s.y);let bob=(mode==='march'||mode==='charge')?Math.sin(time*6+s.phase)*1.4:0;ctx.globalAlpha=.98;ctx.fillStyle='#0005';ctx.beginPath();ctx.ellipse(0,sz*.23,sz*.27,sz*.09,0,0,7);ctx.fill();if(im&&im.complete)ctx.drawImage(im,-sz*.5,-sz*.72+bob,sz,sz);ctx.restore()}
+  function drawFlag(){let x=formationX*W- W*.13,y=formationY*H-H*.12;ctx.save();ctx.strokeStyle='#3a2718';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x,y+45);ctx.lineTo(x,y-23);ctx.stroke();ctx.fillStyle='#751d19';ctx.beginPath();ctx.moveTo(x,y-22);ctx.quadraticCurveTo(x+27+Math.sin(time*2)*3,y-17,x+38,y-3);ctx.quadraticCurveTo(x+20,y+2,x,y-2);ctx.fill();ctx.fillStyle='#e2c47b';ctx.font='bold 13px Georgia';ctx.fillText('ᚠ',x+9,y-5);ctx.restore()}
+  function drawGhost(){if(!drag)return;ctx.save();ctx.globalAlpha=.22;ctx.strokeStyle='#f3d486';ctx.setLineDash([5,5]);ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(targetX*W,targetY*H,W*.23,H*.18,0,0,7);ctx.stroke();ctx.beginPath();ctx.moveTo(formationX*W,formationY*H);ctx.lineTo(targetX*W,targetY*H);ctx.stroke();ctx.restore()}
+  function render(){drawBg();drawGhost();dust.forEach(p=>{ctx.fillStyle=`rgba(184,155,104,${p.a})`;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,7);ctx.fill()});soldiers.forEach(layout);soldiers.slice().sort((a,b)=>a.y-b.y).forEach(drawSoldier);drawFlag();ctx.strokeStyle='#d7c291';ctx.lineWidth=1.3;arrows.forEach(a=>{ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(a.x-10,a.y-a.vy/a.vx*10);ctx.stroke()})}
+  function frame(now){let dt=Math.min(.04,(now-last)/1000);last=now;update(dt);render();requestAnimationFrame(frame)}requestAnimationFrame(frame);
+  setTimeout(()=>document.querySelector('#hint').style.opacity=.65,3500);
+})();
+</script>
+</body></html>
