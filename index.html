@@ -36,7 +36,7 @@
 (() => {
   const cv=document.querySelector('#game'),ctx=cv.getContext('2d',{alpha:false});
   const DPR=Math.min(devicePixelRatio||1,2), sprites={}, files={
-    bg:'assets/viking_map.png',ready:['ready_00.png','ready_03.png','ready_06.png','ready_09.png'],
+    bg:'viking_map.png',ready:['ready_00.png','ready_03.png','ready_06.png','ready_09.png'],
     walk:['walk_00.png','walk_03.png','walk_06.png','walk_09.png'],
     charge:['attack_00.png','attack_03.png','attack_06.png','attack_09.png'],
     shield:['shieldfront_00.png','shieldfront_03.png','shieldfront_06.png','shieldfront_09.png'],
@@ -46,7 +46,7 @@
   };
   let loaded=0,total=1+Object.values(files).slice(1).flat().length;
   function image(src){let im=new Image;im.src=src;im.onload=()=>loaded++;return im}
-  sprites.bg=image(files.bg); for(const [k,v] of Object.entries(files)) if(Array.isArray(v)) sprites[k]=v.map(f=>image('assets/'+f));
+  sprites.bg=image(files.bg); for(const [k,v] of Object.entries(files)) if(Array.isArray(v)) sprites[k]=v.map(f=>image(f));
   let W=0,H=0,groundTop=0,groundBottom=0,mode='ready',time=0,last=performance.now(),drag=null,targetX=.37,targetY=.60,formationX=.37,formationY=.60,arrows=[],dust=[];
   const soldiers=[];
   for(let i=0;i<200;i++){
