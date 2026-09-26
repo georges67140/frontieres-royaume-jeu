@@ -4,45 +4,51 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#101b18">
-<title>Atelier du guerrier — aperçu graphique 0.2</title>
+<title>Atelier du guerrier — aperçu graphique 0.3</title>
 <style>
 html,body{margin:0;height:100%;overflow:hidden;background:#101b18;color:#eee5cf;font:12px system-ui,-apple-system,sans-serif}
-header{height:42px;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:5px max(12px,env(safe-area-inset-right)) 5px max(12px,env(safe-area-inset-left));border-bottom:1px solid #b8a27155}
-#status{font-size:11px;color:#cdb983}a{color:#dfcfaa;white-space:nowrap}
-iframe{display:block;width:100%;height:calc(100% - 42px);border:0}
+header{height:46px;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px max(12px,env(safe-area-inset-right)) 5px max(12px,env(safe-area-inset-left));border-bottom:1px solid #b8a27155}
+#status{font-size:11px;color:#cdb983;line-height:1.35}a{color:#dfcfaa;white-space:nowrap}
+iframe{display:block;width:100%;height:calc(100% - 46px);border:0}
 </style>
 </head>
 <body>
-<header><span id="status" role="status">Aperçu 0.2 · chargement de l’atelier original…</span><a href="./index.html">Atelier original</a></header>
-<iframe id="workshop" title="Atelier du guerrier Babylon, aperçu graphique" src="./index.html"></iframe>
-<script src="./visual-detail.js"></script>
+<header><span id="status" role="status">Atelier 0.3 · chargement du guerrier…</span><a href="./index.html">Comparer à l’original</a></header>
+<iframe id="workshop" title="Atelier du guerrier Babylon, aperçu graphique 0.3" src="./index.html"></iframe>
+<script src="./visual-detail.js?v=0.2.0"></script>
+<script src="./equipment-detail.js?v=0.3.0"></script>
 <script>
 (function(){
   'use strict';
   const frame=document.getElementById('workshop'),status=document.getElementById('status');
   let timer=null,attempts=0;
+  function stop(){if(timer!==null)clearInterval(timer);timer=null;}
   function check(){
     attempts++;
     try{
       const win=frame.contentWindow,workshop=win.RDNWorkshop;
       if(workshop&&workshop.renderer&&workshop.renderer.kind==='babylon'){
         RDNVisualPass.install(workshop,win.BABYLON);
+        RDNEquipmentPass.install(workshop,win.BABYLON,win.RDNMotion);
         const checkbox=win.document.getElementById('bones');
         if(checkbox){checkbox.checked=false;checkbox.dispatchEvent(new win.Event('change'));}
         const notice=win.document.querySelector('.notice');
-        if(notice)notice.textContent='Aperçu matières et cape v0.2 · gestes d’origine conservés.';
-        status.textContent='Aperçu 0.2 · matières, cape et sol · Babylon 3D';
-        clearInterval(timer);timer=null;return;
+        if(notice)notice.textContent='Prototype 3D v0.3 · épée, port bas, casque et décor. Appuis d’origine conservés.';
+        status.textContent='Atelier 0.3 · nouvelle épée, port bas, casque arrondi et décor';
+        stop();return;
       }
     }catch(error){
-      console.error(error);status.textContent='Passe graphique indisponible · atelier original conservé.';
-      clearInterval(timer);timer=null;return;
+      console.error(error);status.textContent='Amélioration indisponible · l’atelier original reste accessible.';
+      stop();return;
     }
-    if(attempts===30)status.textContent='Le moteur 3D se charge encore. Utilise « Réessayer » dans l’atelier si nécessaire.';
-    if(attempts>=180){clearInterval(timer);timer=null;status.textContent='Moteur 3D non chargé · recharge cette page pour réessayer.';}
+    if(attempts===30)status.textContent='La 3D se charge encore. Le bouton Réessayer est dans l’atelier.';
+    if(attempts>=180){stop();status.textContent='3D non chargée · utiliser Réessayer dans l’atelier puis recharger cet aperçu.';}
   }
-  frame.addEventListener('load',()=>{if(timer)clearInterval(timer);attempts=0;check();if(!frame.contentWindow.RDNWorkshop?.renderer?.visualDetails)timer=setInterval(check,500);});
-  addEventListener('pagehide',()=>{if(timer)clearInterval(timer);});
+  function begin(){stop();attempts=0;timer=setInterval(check,500);check();}
+  frame.addEventListener('load',begin);
+  addEventListener('pagehide',stop);
+  addEventListener('pageshow',e=>{if(e.persisted)begin();});
+  begin();
 })();
 </script>
 </body>
