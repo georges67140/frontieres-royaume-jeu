@@ -1,0 +1,7 @@
+'use strict';
+// Zero-dependency development server for StackBlitz. Does not change GitHub Pages.
+const http=require('node:http'),fs=require('node:fs/promises'),path=require('node:path');
+const root=__dirname,types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.cjs':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.svg':'image/svg+xml','.wasm':'application/wasm'};
+function createServer(){return http.createServer(async(req,res)=>{try{if(!['GET','HEAD'].includes(req.method)){res.writeHead(405);res.end();return;}let url=decodeURIComponent(new URL(req.url,'http://localhost').pathname);if(url==='/')url='/bataille-babylon/';let file=path.resolve(root,'.'+url);if(!file.startsWith(root+path.sep)){res.writeHead(403);res.end('Forbidden');return;}let stat=await fs.stat(file);if(stat.isDirectory())file=path.join(file,'index.html');const data=await fs.readFile(file);res.writeHead(200,{'Content-Type':types[path.extname(file)]||'application/octet-stream','Cache-Control':'no-store'});res.end(req.method==='HEAD'?undefined:data);}catch{res.writeHead(404,{'Content-Type':'text/plain; charset=utf-8'});res.end('Fichier introuvable');}});}
+if(require.main===module)createServer().listen(Number(process.env.PORT)||5173,'0.0.0.0',()=>console.log('Les Rangs du Nord — http://localhost:'+(process.env.PORT||5173)+'/bataille-babylon/'));
+module.exports={createServer};

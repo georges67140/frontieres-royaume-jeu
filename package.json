@@ -1,0 +1,11 @@
+{
+  "name": "les-rangs-du-nord-babylon",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Codage direct Babylon.js. Atelier conserve, bataille independante.",
+  "scripts": {
+    "start": "node dev-server.cjs",
+    "test": "node --test bataille-babylon/battle-core.test.cjs",
+    "test:browser": "node bataille-babylon/browser-smoke.cjs"
+  }
+}

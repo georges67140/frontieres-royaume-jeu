@@ -1,0 +1,36 @@
+name: Babylon battle checks
+on:
+  push:
+    paths:
+      - 'bataille-babylon/**'
+      - 'atelier-babylon/**'
+      - 'dev-server.cjs'
+      - '.github/workflows/babylon-battle-checks.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test simulation with the original atelier controller
+        run: npm test
+      - name: Install pinned browser test dependencies
+        run: npm install --no-save playwright@1.55.0 babylonjs@8.26.0
+      - name: Install browser runtimes
+        run: npx playwright install --with-deps chromium webkit
+      - name: Render and exercise desktop and mobile WebKit
+        run: npm run test:browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: babylon-battle-screenshots
+          path: artifacts/
+          retention-days: 7
