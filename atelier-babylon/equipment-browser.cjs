@@ -19,19 +19,24 @@ const {createServer}=require('../dev-server.cjs');
       try{
         const context=await browser.newContext(config.options);page=await context.newPage();
         page.on('pageerror',e=>errors.push(e.stack||e.message));
-        page.on('console',async m=>{if(['error','warning'].includes(m.type())){messages.push(m.text());for(const a of m.args()){const stack=await a.evaluate(x=>x instanceof Error?x.stack:null).catch(()=>null);if(stack)messages.push(stack);}}});
+        page.on('console',async m=>{if(m.type()==='error')errors.push(m.text());if(['error','warning'].includes(m.type())){messages.push(m.text());for(const a of m.args()){const stack=await a.evaluate(x=>x instanceof Error?x.stack:null).catch(()=>null);if(stack)messages.push(stack);}}});
         await page.route(/https:\/\/(cdn\.jsdelivr\.net|unpkg\.com|cdn\.babylonjs\.com)\/.*babylon(?:\.max)?\.js/,r=>r.fulfill({contentType:'text/javascript',body:bytes}));
         await page.goto(url);
-        await page.waitForFunction(()=>{const w=document.getElementById('workshop').contentWindow;return w.RDNWorkshop?.renderer?.equipmentDetails?.version==='0.3.0'||w.document.getElementById('engineStatus')?.textContent.includes('Erreur 3D');},null,{timeout:20000});
+        await page.waitForFunction(()=>['ready','error'].includes(window.RDNPreview?.state),null,{timeout:30000});
+        assert.equal(await page.evaluate(()=>RDNPreview.state),'ready');
         const frame=await (await page.locator('#workshop').elementHandle()).contentFrame();
+        await frame.waitForFunction(()=>RDNWorkshop.renderer?.scene.isReady(),null,{timeout:15000});
         await page.waitForTimeout(500);
         assert.equal(await frame.evaluate(()=>RDNWorkshop.renderer?.kind),'babylon');
         const rendering=await frame.evaluate(()=>{
-          const s=RDNWorkshop.renderer.scene;
-          return {version:BABYLON.Engine.Version,ready:s.isReady(),blade:s.getMeshByName('rdn-fullered-blade')?.getTotalVertices(),helmet:s.getMeshByName('rdn-rounded-helmet')?.isEnabled(),oldHelmet:s.getMeshByName('helmet')?.isEnabled(),cape:!!s.getMeshByName('rdn-draped-cape'),pebbles:!!s.getMeshByName('rdn-path-pebbles')};
+          const s=RDNWorkshop.renderer.scene,hand=s.getMeshByName('gloveR').position;
+          const p=RDNEquipmentPass.refinePose(RDNWorkshop.motion.pose,RDNWorkshop.motion,RDNMotion);
+          return {version:BABYLON.Engine.Version,ready:s.isReady(),blade:s.getMeshByName('rdn-fullered-blade')?.getTotalVertices(),helmet:s.getMeshByName('rdn-rounded-helmet')?.isEnabled(),oldHelmet:s.getMeshByName('helmet')?.isEnabled(),cape:!!s.getMeshByName('rdn-draped-cape'),pebbles:!!s.getMeshByName('rdn-path-pebbles'),handError:Math.hypot(hand.x-p.joints.handR.x,hand.y-p.joints.handR.y,hand.z-p.joints.handR.z),sameRealm:RDNEquipmentPass.bladeData().positions instanceof Array};
         });
         assert.equal(rendering.version,'8.26.0');assert.ok(rendering.ready);assert.equal(rendering.blade,50);
         assert.equal(rendering.helmet,true);assert.equal(rendering.oldHelmet,false);assert.ok(rendering.cape&&rendering.pebbles);
+        assert.ok(rendering.sameRealm);assert.ok(rendering.handError<1e-6,'New right-arm pose must actually be rendered.');
+        await page.screenshot({path:'artifacts/'+config.name+'-idle.png'});
         await frame.locator('[data-action="walk"]').click();
         await frame.waitForFunction(()=>RDNWorkshop.motion.distance>.1,null,{timeout:15000});
         await frame.locator('[data-action="stop"]').click();
@@ -49,6 +54,7 @@ const {createServer}=require('../dev-server.cjs');
         await page.waitForTimeout(500);
         await page.screenshot({path:'artifacts/'+config.name+'-slope.png'});
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);
+        assert.equal(await frame.evaluate(()=>RDNWorkshop.renderer?.equipmentDetails?.version),'0.3.0');
         assert.deepEqual(errors,[]);
         results.push({name:config.name,passed:true,rendering,messages});console.log('PASS '+config.name+' — original atelier, equipment 0.3, walk/guard/contact and slope');
       }catch(error){
@@ -59,10 +65,6 @@ const {createServer}=require('../dev-server.cjs');
       }finally{await browser.close();}
     }
     await fs.writeFile('artifacts/atelier-results.json',JSON.stringify(results,null,2));
-    if(results.some(r=>!r.passed)){
-      await fs.writeFile('artifacts/debug-babylon-8.26.0.js',bytes);
-      await fs.cp('atelier-babylon','artifacts/debug-workshop',{recursive:true});
-    }
     assert.ok(results.every(r=>r.passed),'Atelier browser checks failed; see artifacts/atelier-results.json');
   }finally{await new Promise(r=>server.close(r));}
 })().catch(error=>{console.error(error);process.exitCode=1;});

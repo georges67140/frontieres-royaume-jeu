@@ -15,36 +15,59 @@ iframe{display:block;width:100%;height:calc(100% - 46px);border:0}
 <body>
 <header><span id="status" role="status">Atelier 0.3 · chargement du guerrier…</span><a href="./index.html">Comparer à l’original</a></header>
 <iframe id="workshop" title="Atelier du guerrier Babylon, aperçu graphique 0.3" src="./index.html"></iframe>
-<script src="./visual-detail.js?v=0.2.0"></script>
-<script src="./equipment-detail.js?v=0.3.0"></script>
 <script>
 (function(){
   'use strict';
   const frame=document.getElementById('workshop'),status=document.getElementById('status');
-  let timer=null,attempts=0;
+  const report=window.RDNPreview={version:'0.3.0',state:'loading',errors:[]};
+  let timer=null,attempts=0,installing=false,installed=null,generation=0;
   function stop(){if(timer!==null)clearInterval(timer);timer=null;}
-  function check(){
-    attempts++;
-    try{
-      const win=frame.contentWindow,workshop=win.RDNWorkshop;
-      if(workshop&&workshop.renderer&&workshop.renderer.kind==='babylon'){
-        RDNVisualPass.install(workshop,win.BABYLON);
-        RDNEquipmentPass.install(workshop,win.BABYLON,win.RDNMotion);
-        const checkbox=win.document.getElementById('bones');
-        if(checkbox){checkbox.checked=false;checkbox.dispatchEvent(new win.Event('change'));}
-        const notice=win.document.querySelector('.notice');
-        if(notice)notice.textContent='Prototype 3D v0.3 · épée, port bas, casque et décor. Appuis d’origine conservés.';
-        status.textContent='Atelier 0.3 · nouvelle épée, port bas, casque arrondi et décor';
-        stop();return;
-      }
-    }catch(error){
-      console.error(error);status.textContent='Amélioration indisponible · l’atelier original reste accessible.';
-      stop();return;
-    }
-    if(attempts===30)status.textContent='La 3D se charge encore. Le bouton Réessayer est dans l’atelier.';
-    if(attempts>=180){stop();status.textContent='3D non chargée · utiliser Réessayer dans l’atelier puis recharger cet aperçu.';}
+  // Add-ons execute in Babylon's iframe realm: its WebGL buffers must not
+  // receive plain Arrays created by the parent window.
+  function loadInWorkshop(win,src,name){
+    if(win[name])return Promise.resolve();
+    return new Promise((resolve,reject)=>{
+      const script=win.document.createElement('script');let settled=false;
+      const timeout=setTimeout(()=>done(new Error('Chargement trop long : '+src)),10000);
+      function done(error){if(settled)return;settled=true;clearTimeout(timeout);script.onload=null;script.onerror=null;if(error){script.remove();reject(error);}else resolve();}
+      script.src=new URL(src,win.location.href).href;
+      script.onload=()=>done(win[name]?null:new Error('Module non initialisé : '+name));
+      script.onerror=()=>done(new Error('Module inaccessible : '+src));
+      win.document.head.appendChild(script);
+    });
   }
-  function begin(){stop();attempts=0;timer=setInterval(check,500);check();}
+  async function check(){
+    attempts++;const ticket=generation;
+    try{
+      const win=frame.contentWindow,workshop=win.RDNWorkshop,view=workshop&&workshop.renderer;
+      if(!view||view.kind!=='babylon'){
+        if(installed){report.state='error';status.textContent='Erreur 3D · utiliser Réessayer dans l’atelier.';installed=null;}
+        else if(attempts===30)status.textContent='La 3D se charge encore. Réessayer est disponible dans l’atelier.';
+        return;
+      }
+      if(view===installed||installing)return;
+      installing=true;report.state='installing';
+      status.textContent='Atelier 0.3 · préparation des matières et de l’équipement…';
+      await loadInWorkshop(win,'./visual-detail.js?v=0.2.0','RDNVisualPass');
+      await loadInWorkshop(win,'./equipment-detail.js?v=0.3.0','RDNEquipmentPass');
+      if(ticket!==generation||workshop.renderer!==view)return;
+      win.RDNVisualPass.install(workshop,win.BABYLON);
+      win.RDNEquipmentPass.install(workshop,win.BABYLON,win.RDNMotion);
+      const checkbox=win.document.getElementById('bones');
+      if(checkbox){checkbox.checked=false;checkbox.dispatchEvent(new win.Event('change'));}
+      workshop.render(0);
+      if(workshop.renderer!==view)throw new Error('Le premier rendu de l’aperçu a échoué.');
+      installed=view;report.state='ready';
+      const notice=win.document.querySelector('.notice');
+      if(notice)notice.textContent='Prototype 3D v0.3 · épée, port bas, casque et décor. Appuis d’origine conservés.';
+      status.textContent='Atelier 0.3 · nouvelle épée, port bas, casque arrondi et décor';
+    }catch(error){
+      console.error(error);report.state='error';report.errors.push(error.message);
+      status.textContent='Amélioration indisponible · l’atelier original reste accessible.';
+      stop();
+    }finally{if(ticket===generation)installing=false;}
+  }
+  function begin(){stop();generation++;attempts=0;installing=false;installed=null;timer=setInterval(check,500);check();}
   frame.addEventListener('load',begin);
   addEventListener('pagehide',stop);
   addEventListener('pageshow',e=>{if(e.persisted)begin();});
