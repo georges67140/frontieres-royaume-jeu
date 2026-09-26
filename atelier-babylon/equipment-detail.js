@@ -47,14 +47,14 @@
   }
   function domeData() {
     const rings=[[.058,.167],[.108,.165],[.156,.147],[.195,.117],[.225,.076],[.24,.03]];
-    const positions=[],indices=[],n=24;
-    rings.forEach(([y,r])=>{for(let i=0;i<n;i++){const a=i*TAU/n;positions.push(Math.sin(a)*r,y,Math.cos(a)*r);}});
+    const positions=[],indices=[],uvs=[],n=24;
+    rings.forEach(([y,r])=>{for(let i=0;i<n;i++){const a=i*TAU/n;positions.push(Math.sin(a)*r,y,Math.cos(a)*r);uvs.push(i/n,y/.244);}});
     for(let k=0;k<rings.length-1;k++)for(let i=0;i<n;i++){
       const a=k*n+i,b=k*n+(i+1)%n;indices.push(a,a+n,b,b,a+n,b+n);
     }
-    const tip=positions.length/3;positions.push(0,.244,0);
+    const tip=positions.length/3;positions.push(0,.244,0);uvs.push(.5,1);
     for(let i=0;i<n;i++)indices.push(120+i,tip,120+(i+1)%n);
-    return {positions,indices};
+    return {positions,indices,uvs};
   }
   function pebbleData() {
     let seed=59013;const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
@@ -83,7 +83,7 @@
     function finish(mesh,mat,parent,casts=true){keep(mesh);mesh.material=mat;mesh.parent=parent||null;mesh.isPickable=false;if(casts&&shadow){shadow.addShadowCaster(mesh);undo.push(()=>shadow.removeShadowCaster(mesh));}return mesh;}
     function geometry(name,data,mat,parent,casts=true){
       const mesh=new B.Mesh(name,scene);keep(mesh);const vd=new B.VertexData();
-      vd.positions=data.positions;vd.indices=data.indices;vd.normals=[];if(data.colors)vd.colors=data.colors;
+      vd.positions=data.positions;vd.indices=data.indices;vd.normals=[];if(data.colors)vd.colors=data.colors;if(data.uvs)vd.uvs=data.uvs;
       B.VertexData.ComputeNormals(vd.positions,vd.indices,vd.normals);vd.applyToMesh(mesh,true);
       // Registered once in owned, even when a construction error occurs.
       owned.pop();return finish(mesh,mat,parent,casts);
@@ -127,7 +127,20 @@
         pebbles.updateVerticesData(B.VertexBuffer.PositionKind,stones.positions,true);
         pebbles.updateVerticesData(B.VertexBuffer.NormalKind,normals);
       });
-      return view.equipmentDetails={version:VERSION,dispose};
+      // Babylon 8.26 DynamicTexture.clone creates an unpainted, unuploaded
+      // canvas. Prime copies made by PBRMaterial.clone using their painted
+      // originals, including the cape from the preserved visual pass.
+      let texturesRepaired=0;
+      const textures=scene.textures.slice();
+      for(const copy of textures){
+        if(copy.getClassName()!=='DynamicTexture'||copy.isReady())continue;
+        const source=textures.find(t=>t!==copy&&t.name===copy.name&&t.getClassName()==='DynamicTexture'&&t.isReady());
+        if(!source)continue;
+        const size=copy.getSize();
+        copy.getContext().drawImage(source.getContext().canvas,0,0,size.width,size.height);
+        copy.update(false);texturesRepaired++;
+      }
+      return view.equipmentDetails={version:VERSION,texturesRepaired,dispose};
     }catch(error){dispose();throw error;}
     function dispose(){
       if(disposed)return;disposed=true;
